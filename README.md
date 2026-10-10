@@ -6,9 +6,9 @@ Alexa Radio lets you create channels of streaming stations and play them with an
 
 1. Fork this repository on GitHub.
 2. Import the fork as a project in Vercel. The included [vercel.json](./vercel.json) builds static files from `public/` and deploys the handlers in `functions/`, with no `api/` directory required.
-3. Create or connect an Upstash Redis database through the Vercel Marketplace. Ensure the project has `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` set. The compatible `KV_REST_API_URL` and `KV_REST_API_TOKEN` names are also accepted.
-4. If you use a custom domain, set `PUBLIC_URL` to its HTTPS origin (for example, `https://radio.example.com`). Otherwise the Alexa backend uses the deployment host from the incoming request.
-5. Deploy the project. Open the Vercel project URL to add stations and verify the editor loads.
+3. Create or connect an Upstash Redis database through the Vercel Marketplace. In **Project Settings → Environment Variables**, add `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` for the environments you deploy to. Treat the token as a secret and do not put either value in the repository. The compatible `KV_REST_API_URL` and `KV_REST_API_TOKEN` names are also accepted.
+4. If you use a custom domain, add `PUBLIC_URL` in **Project Settings → Environment Variables** with its HTTPS origin (for example, `https://radio.example.com`). Otherwise the Alexa backend uses the deployment host from the incoming request.
+5. Redeploy after adding or changing environment variables. Open the Vercel project URL to add stations and verify the editor loads.
 
 The editor is at `/`, the station API is `/api/stations`, and the Alexa endpoint is `/api/alexa`. Redis uses one shared `channels` key, so the Vercel deployment and Alexa skill share the same station list.
 
@@ -23,6 +23,6 @@ The editor is at `/`, the station API is `/api/stations`, and the Alexa endpoint
 
 ## Local development
 
-Install dependencies with `npm install`, copy `.env.example` to `.env`, and fill in the Upstash credentials. Vercel CLI can run the static page and configured routes locally with `vercel dev`.
+For local development, install dependencies with `npm install` and run the project with `vercel dev`. Supply the Redis credentials through your local shell environment; do not create or commit a `.env` file. Keep production credentials in Vercel's Environment Variables settings.
 
 The Alexa request handler verifies Amazon's request signature before processing the envelope. The static site and media assets are under `public/`; audio artwork and the playback-failure audio are served from `public/data/`.
