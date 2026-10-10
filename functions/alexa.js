@@ -1,6 +1,5 @@
 const verifier = require('alexa-verifier');
-
-const db = require('lib')({ token: process.env.STDLIB_SECRET_TOKEN }).utils.kv;
+const { getChannels, setChannels } = require('./storage');
 
 // Global variable of collection
 let user_url = '';
@@ -73,14 +72,14 @@ class AlexaResponses {
             "art": {
               "sources": [
                 {
-                  "url": `${user_url}assets?asset=station`
+                  "url": `${user_url.replace(/\/api\/$/, '')}/data/station.png`
                 }
               ]
             },
             "backgroundImage": {
               "sources": [
                 {
-                  "url": `${user_url}assets?asset=background`
+                  "url": `${user_url.replace(/\/api\/$/, '')}/data/background.png`
                 }
               ]
             }
@@ -138,14 +137,14 @@ class AlexaResponses {
             "art": {
               "sources": [
                 {
-                  "url": `${user_url}assets?asset=station`
+                  "url": `${user_url.replace(/\/api\/$/, '')}/data/station.png`
                 }
               ]
             },
             "backgroundImage": {
               "sources": [
                 {
-                  "url": `${user_url}assets?asset=background`
+                  "url": `${user_url.replace(/\/api\/$/, '')}/data/background.png`
                 }
               ]
             }
@@ -403,18 +402,11 @@ const randomItem = (arrayOfItems) => {
 };
 
 function getUserURL(context) {
-  let identifier = context.service.identifier;
-  let user = identifier.split('.')[0];
-  let service = identifier.split('.')[1].replace(/\[|\]/gmi, '');
-
-  return `https://${user}.api.stdlib.com/${service}/`;
+  return `${context.publicUrl}/api/`;
 }
 // Save data to local storage or elsewehere
 async function saveData(savedData) {
-  await db.set({
-    key: 'channels',
-    value: savedData
-  });
+  await setChannels(savedData);
 }
 
 const convertMinutes = (timeDur) => {
@@ -471,7 +463,7 @@ const LaunchRequestIntentHandler = async (requestEnvelope) => {
   if (station.name) {
     Alexa
       .speak(`${now_playing} - ${station.name}, from ${station.channel}.`)
-      .card(station.name, station.channel, `${user_url}assets?asset=background`)
+      .card(station.name, station.channel, `${user_url.replace(/\/api\/$/, '')}/data/background.png`)
       .play(user_url, station.url, station.progress, station.token)
     // save session attributes
     Alexa.sessionAttributes = { token: station };
@@ -705,7 +697,7 @@ const ResumeIntentHandler = async (requestEnvelope) => {
     let station = collection.resume;
     Alexa
       .speak(`resuming ${station.name}`)
-      .play('userurl/', station.url, station.progress, `${station.channel}:${station.name}`);
+      .play(user_url, station.url, station.progress, `${station.name}:${station.channel}`);
   } else {
     Alexa.speak('There is nothing to resume.')
   }
@@ -719,7 +711,7 @@ const ShuffleOnIntentHandler = async (requestEnvelope) => {
     let station = collection.resume;
     Alexa
       .speak(`resuming ${station.name}`)
-      .play('userurl/', station.url, station.progress, `${station.channel}:${station.name}`);
+      .play(user_url, station.url, station.progress, `${station.name}:${station.channel}`);
   } else {
     Alexa.speak('There is nothing to resume.')
   }
@@ -797,7 +789,7 @@ const AudioPlayerEventHandler = async (requestEnvelope) => {
     case "PlaybackFailed":
       console.log(`PlaybackFailed - ${requestEnvelope.request.token} - error: ${requestEnvelope.request.error.message}`);
 
-      Alexa.play(user_url, `${user_url}assets?asset=failed`, 0, 'error');
+      Alexa.play(user_url, `${user_url.replace(/\/api\/$/, '')}/data/stream_failed.mp3`, 0, 'error');
       collection.update(token, offset, 'failed');
       await saveData(collection.data());
       break;
@@ -874,7 +866,7 @@ const collection = new Collection();
 * Sends an Allexa Response
 * @returns {object.http} Object The result
 */
-module.exports = async (context) => {
+const handleRequest = async (context) => {
 
   try {
     await verifier(
@@ -887,9 +879,7 @@ module.exports = async (context) => {
     user_url = getUserURL(context);
 
     // get saved data
-    let saved_data = await db.get({
-      key: 'channels'
-    });
+    let saved_data = await getChannels();
 
     collection.load(saved_data);
 
@@ -957,3 +947,11 @@ module.exports = async (context) => {
     return resObj;
   }
 }
+
+let requestQueue = Promise.resolve();
+
+module.exports = (context) => {
+  const queuedRequest = requestQueue.then(() => handleRequest(context));
+  requestQueue = queuedRequest.then(() => undefined, () => undefined);
+  return queuedRequest;
+};
