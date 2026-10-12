@@ -5,6 +5,7 @@
   "author": "tinkr",
   "dependencies": {
     "@upstash/redis": "^1.35.0",
+    "@vercel/analytics": "^2.0.1",
     "alexa-verifier": "^2.0.1"
   }
 }
