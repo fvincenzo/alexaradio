@@ -304,6 +304,7 @@ class Collection {
 
         if (item) {
           item.channel = channel.name;
+          item.token = `${item.name}:${channel.name}`;
         }
       }
 
@@ -779,7 +780,6 @@ const AudioPlayerEventHandler = async (requestEnvelope) => {
     case "PlaybackNearlyFinished": {
       let station = collection.next(token);
       if (station.name) {
-        station.token = `${station.name}:${station.channel}`;
         Alexa.queue(user_url, station.url, station.progress, station.token, token);
       } else {
         console.log("PlaybackNearlyFinished - ", token + ": Next station not found");
