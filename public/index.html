@@ -40,6 +40,19 @@
 			margin-right: 10px
 		}
 
+		#editor-lock-btn {
+			display: flex;
+			align-items: center;
+			gap: 4px;
+		}
+
+		.editor-locked #channel-add-btn,
+		.editor-locked #channel-list a.disabled,
+		.editor-locked #modal-channel a.disabled {
+			pointer-events: none;
+			opacity: 0.5;
+		}
+
 		.intro {
 			margin: 20px 0;
 		}
@@ -574,7 +587,7 @@
 
 </head>
 
-<body class="blue-grey darken-4">
+<body class="blue-grey darken-4 editor-locked">
 
 	<nav class="transparent">
 		<div class="nav-wrapper container"">
@@ -584,6 +597,8 @@
 			<!-- <li><a id="show-notifications-btn"><i class="material-icons">notifications</i></a> -->
 			<li><a id="show-settings-btn" href="#settings-modal" class="modal-trigger"><i
 						class="material-icons">settings</i></a></li>
+			<li><a id="editor-lock-btn" href="#unlock-modal"><i
+						class="material-icons">lock_open</i><span>Unlock</span></a></li>
 		</ul>
 		</div>
 		</div>
@@ -600,7 +615,7 @@
 
 				<div class="row channel-add">
 					<div class="col s12">
-						<a data-type="station" href="#modal-channel"
+						<a id="channel-add-btn" data-type="station" href="#modal-channel"
 							class="waves-effect waves-light btn-small modal-trigger z-depth-2 channel-item-add-btn orange accent-1 black-text"><i
 								class="material-icons left">library_add</i>channel</a>
 						<div class="helper-text-btn">Channels are a collection of stations.
@@ -685,6 +700,22 @@
 					Settings</a>
 				<a href="#!" class="modal-close modal-action btn-flat teal-text left">Cancel</a>
 
+			</div>
+		</div>
+
+		<div id="unlock-modal" class="modal">
+			<div class="modal-content">
+				<h4 class="modal-title">Unlock editor</h4>
+				<p>Enter the editor password to change channels and settings.</p>
+				<form id="unlock-form">
+					<div class="input-field">
+						<input id="editor-password" type="password" autocomplete="current-password" required>
+						<label for="editor-password">Editor password</label>
+					</div>
+					<p id="unlock-error" class="red-text" role="alert"></p>
+					<button id="editor-unlock-submit" type="submit"
+						class="waves-effect waves-light btn orange accent-1 black-text">Unlock</button>
+				</form>
 			</div>
 		</div>
 
@@ -784,6 +815,7 @@
 			channelRenameListener();
 			channelShuffleListener();
 			stationRenameListener();
+			setEditorUnlocked(Boolean(editorPassword));
 		}
 
 		const empty_state_html = `
@@ -803,6 +835,7 @@
 			items: []
 		};
 
+		let editorPassword = null;
 		let modal_station_count = 0;
 
 		console.log('user URL: ', user_collection_url);
@@ -828,6 +861,76 @@
 		// Save Settings
 		el('#settings-save').addEventListener('click', saveSettings);
 
+		el('#editor-lock-btn').addEventListener('click', event => {
+			event.preventDefault();
+			if (editorPassword) {
+				setEditorUnlocked(false);
+			} else {
+				const unlockModal = M.Modal.getInstance(el('#unlock-modal')) ||
+					M.Modal.init(el('#unlock-modal'));
+				unlockModal.open();
+			}
+		});
+		el('#unlock-form').addEventListener('submit', unlockEditor);
+
+		function setEditorUnlocked(unlocked) {
+			if (!unlocked) {
+				editorPassword = null;
+			}
+
+			document.body.classList.toggle('editor-locked', !unlocked);
+			const lockButton = el('#editor-lock-btn');
+			lockButton.querySelector('i').textContent = unlocked ? 'lock' : 'lock_open';
+			lockButton.querySelector('span').textContent = unlocked ? 'Lock' : 'Unlock';
+
+			const controls = document.querySelectorAll(
+				'#channel-add-btn, #channel-list [contenteditable], #channel-list input, #channel-list a, ' +
+				'#modal-channel input, #modal-channel a, #settings-modal input, #settings-save'
+			);
+			controls.forEach(control => {
+				if (control.hasAttribute('contenteditable')) {
+					control.setAttribute('contenteditable', String(unlocked));
+				} else if (control instanceof HTMLInputElement || control instanceof HTMLButtonElement) {
+					control.disabled = !unlocked;
+				} else {
+					control.classList.toggle('disabled', !unlocked);
+					control.setAttribute('aria-disabled', String(!unlocked));
+				}
+			});
+		}
+
+		async function unlockEditor(event) {
+			event.preventDefault();
+			const passwordInput = el('#editor-password');
+			const password = passwordInput.value;
+			const errorMessage = el('#unlock-error');
+			const submitButton = el('#editor-unlock-submit');
+			errorMessage.textContent = '';
+			submitButton.disabled = true;
+
+			try {
+				await axios({
+					url: `${user_collection_url}stations`,
+					method: 'POST',
+					data: { action: 'unlock' },
+					headers: { Authorization: `Bearer ${password}` }
+				});
+				editorPassword = password;
+				setEditorUnlocked(true);
+				passwordInput.value = '';
+				M.Modal.getInstance(el('#unlock-modal')).close();
+				showToast('check', 'Editor unlocked.');
+			} catch (error) {
+				const status = error.response && error.response.status;
+				errorMessage.textContent = status === 503
+					? 'The editor password has not been configured for this deployment.'
+					: 'Incorrect editor password.';
+				passwordInput.focus();
+			} finally {
+				submitButton.disabled = false;
+			}
+		}
+
 		function insertAtCursor(input, textToInsert) {
 			const isSuccess = document.execCommand("insertText", false, textToInsert);
 
@@ -851,6 +954,9 @@
 
 
 		function collectionAddItem(channel_name, event) {
+			if (!editorPassword) {
+				return;
+			}
 
 			channel_name = sanitized(channel_name);
 			event.preventDefault();
@@ -943,6 +1049,9 @@
 		}
 
 		function addChannel(e) {
+			if (!editorPassword) {
+				return;
+			}
 
 			let channel_name = el('#modal-channel-name-input').value;
 
@@ -984,6 +1093,9 @@
 		}
 
 		function addStation(e) {
+			if (!editorPassword) {
+				return;
+			}
 
 			e.preventDefault();
 			let station_name = el('#modal-station-name').value;
@@ -1080,6 +1192,9 @@
 		}
 
 		async function deleteStation(e) {
+			if (!editorPassword) {
+				return;
+			}
 
 
 			let items_list = collection.list;
@@ -1127,6 +1242,9 @@
 
 		// Show Item Add Input Fields
 		function showAddItem(channel_name, event) {
+			if (!editorPassword) {
+				return;
+			}
 			event.preventDefault();
 			channel_name = sanitized(channel_name);
 			let item_add = document.querySelector(`.${channel_name}-item-add`);
@@ -1164,6 +1282,9 @@
 
 			channels.forEach(channel => {
 				channel.addEventListener('keydown', async e => {
+					if (!editorPassword) {
+						return;
+					}
 					if (e.keyCode == 13) {
 						e.preventDefault();
 						let channel_container = e.target.parentNode.parentNode.parentNode.parentNode;
@@ -1186,6 +1307,9 @@
 
 			channel_shuffles.forEach(shuffle => {
 				shuffle.addEventListener('change', async e => {
+					if (!editorPassword) {
+						return;
+					}
 
 					e.preventDefault();
 					let channel_container = e.target.parentNode.parentNode.parentNode.parentNode.parentNode.parentNode.parentNode;
@@ -1218,6 +1342,9 @@
 
 			station_names.forEach(name => {
 				name.addEventListener('keydown', async e => {
+					if (!editorPassword) {
+						return;
+					}
 					console.log(e.keyCode);
 
 					if (e.keyCode == 13) {
@@ -1239,6 +1366,9 @@
 
 			station_urls.forEach(url => {
 				url.addEventListener('keydown', async e => {
+					if (!editorPassword) {
+						return;
+					}
 					console.log(e.keyCode);
 
 					if (e.keyCode == 13) {
@@ -1290,6 +1420,11 @@
 		}
 
 		async function saveStations(channels, toast_msg) {
+			if (!editorPassword) {
+				showToast('info', 'Unlock the editor before saving changes.');
+				return;
+			}
+
 			let data = {
 				settings: collection.settings || {},
 				resume: collection.resume || {},
@@ -1299,7 +1434,8 @@
 			axios({
 				url: `${user_collection_url}stations`,
 				method: "POST",
-				data
+				data,
+				headers: { Authorization: `Bearer ${editorPassword}` }
 			})
 				.then(result => {
 					if (result.status == 200) {
@@ -1315,10 +1451,23 @@
 				})
 				.catch(error => {
 					console.log('error', error);
+					const status = error.response && error.response.status;
+					if (status === 401) {
+						setEditorUnlocked(false);
+						showToast('info', 'Editor password was rejected. Unlock again to continue.');
+					} else if (status === 503) {
+						showToast('info', 'The editor password is not configured for this deployment.');
+					} else {
+						showToast('info', 'Unable to save changes.');
+					}
 				})
 		}
 
 		function saveSettings() {
+			if (!editorPassword) {
+				showToast('info', 'Unlock the editor before saving changes.');
+				return;
+			}
 
 			let now_playing = [];
 			let stop_playing = [];
@@ -1373,7 +1522,8 @@
 			axios({
 				url: `${user_collection_url}stations`,
 				method: "POST",
-				data
+				data,
+				headers: { Authorization: `Bearer ${editorPassword}` }
 			})
 				.then(result => {
 					console.log('result', result);
@@ -1386,6 +1536,15 @@
 				})
 				.catch(error => {
 					console.log('error', error);
+					const status = error.response && error.response.status;
+					if (status === 401) {
+						setEditorUnlocked(false);
+						showToast('info', 'Editor password was rejected. Unlock again to continue.');
+					} else if (status === 503) {
+						showToast('info', 'The editor password is not configured for this deployment.');
+					} else {
+						showToast('info', 'Unable to save settings.');
+					}
 				})
 		}
 
@@ -1511,6 +1670,9 @@
 
 		// <!-- Modal Delete Station -->
 		function modalStationDelete(index) {
+			if (!editorPassword) {
+				return;
+			}
 			// console.log(new_channel.stations, station_index);
 			showToast('check', `${new_channel.items[index].name} deleted`);
 
