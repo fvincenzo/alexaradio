@@ -598,7 +598,7 @@
 			<li><a id="show-settings-btn" href="#settings-modal" class="modal-trigger"><i
 						class="material-icons">settings</i></a></li>
 			<li><a id="editor-lock-btn" href="#unlock-modal"><i
-						class="material-icons">lock_open</i><span>Unlock</span></a></li>
+						class="material-icons" aria-hidden="true">lock_open</i></a></li>
 		</ul>
 		</div>
 		</div>
@@ -881,7 +881,8 @@
 			document.body.classList.toggle('editor-locked', !unlocked);
 			const lockButton = el('#editor-lock-btn');
 			lockButton.querySelector('i').textContent = unlocked ? 'lock' : 'lock_open';
-			lockButton.querySelector('span').textContent = unlocked ? 'Lock' : 'Unlock';
+			lockButton.setAttribute('aria-label', unlocked ? 'Lock editor' : 'Unlock editor');
+			lockButton.title = unlocked ? 'Lock editor' : 'Unlock editor';
 
 			const controls = document.querySelectorAll(
 				'#channel-add-btn, #channel-list [contenteditable], #channel-list input, #channel-list a, ' +
